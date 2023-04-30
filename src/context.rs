@@ -11,12 +11,12 @@ use super::{MidiMsg, TimeCode};
 /// messages, or [`UniversalRealTimeMsg::TimeCodeFull`](crate::UniversalRealTimeMsg::TimeCodeFull)
 /// messages.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct ReceiverContext {
-    pub previous_channel_message: Option<MidiMsg>,
+pub struct ReceiverContext<'a> {
+    pub previous_channel_message: Option<MidiMsg<'a>>,
     pub time_code: TimeCode,
 }
 
-impl ReceiverContext {
+impl<'a> ReceiverContext<'a> {
     pub fn new() -> Self {
         Self::default()
     }

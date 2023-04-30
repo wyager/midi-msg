@@ -12,7 +12,7 @@ use super::SystemExclusiveMsg;
 
 /// The primary interface of this library. Used to encode MIDI messages.
 #[derive(Debug, Clone, PartialEq)]
-pub enum MidiMsg {
+pub enum MidiMsg<'a> {
     /// Channel-level messages that act on a voice, such as turning notes on and off.
     ChannelVoice {
         channel: Channel,
@@ -46,10 +46,10 @@ pub enum MidiMsg {
     /// The bulk of the MIDI spec lives here, in "Universal System Exclusive" messages.
     /// Also the home of manufacturer-specific messages.
     #[cfg(feature = "sysex")]
-    SystemExclusive { msg: SystemExclusiveMsg },
+    SystemExclusive { msg: SystemExclusiveMsg<'a> },
 }
 
-impl MidiMsg {
+impl<'a> MidiMsg<'a> {
     /// Turn a `MidiMsg` into a series of bytes.
     pub fn to_midi(&self) -> Vec<u8> {
         let mut r: Vec<u8> = vec![];
@@ -60,7 +60,7 @@ impl MidiMsg {
     /// Turn a series of bytes into a `MidiMsg`.
     ///
     /// Ok results return a MidiMsg and the number of bytes consumed from the input.
-    pub fn from_midi(m: &[u8]) -> Result<(Self, usize), ParseError> {
+    pub fn from_midi(m: &'a [u8]) -> Result<(Self, usize), ParseError> {
         Self::from_midi_with_context(m, &mut ReceiverContext::default())
     }
 
@@ -78,27 +78,27 @@ impl MidiMsg {
     /// messages.
     ///
     /// Ok results return a MidiMsg and the number of bytes consumed from the input.
-    pub fn from_midi_with_context(
-        m: &[u8],
-        ctx: &mut ReceiverContext,
-    ) -> Result<(Self, usize), ParseError> {
+    pub fn from_midi_with_context<'b>(
+        m: &'a [u8],
+        ctx: &mut ReceiverContext<'b>,
+    ) -> Result<(Self, usize), ParseError>  where 'a : 'b{
         Self::_from_midi_with_context(m, ctx, true)
     }
 
     /// Like [`MidiMsg::from_midi_with_context`] but does not turn multiple related consecutive messages
     /// into one `MidiMsg`.
-    pub fn from_midi_with_context_no_extensions(
+    pub fn from_midi_with_context_no_extensions<'b>(
         m: &[u8],
-        ctx: &mut ReceiverContext,
-    ) -> Result<(Self, usize), ParseError> {
+        ctx: &mut ReceiverContext<'b>,
+    ) -> Result<(Self, usize), ParseError> where 'a : 'b {
         Self::_from_midi_with_context(m, ctx, false)
     }
 
-    fn _from_midi_with_context(
+    fn _from_midi_with_context<'b>(
         m: &[u8],
-        ctx: &mut ReceiverContext,
+        ctx: &mut ReceiverContext<'b>,
         allow_extensions: bool,
-    ) -> Result<(Self, usize), ParseError> {
+    ) -> Result<(Self, usize), ParseError> where 'a : 'b {
         let (mut midi_msg, mut len) = match m.first() {
             Some(b) => match b >> 4 {
                 0x8 | 0x9 | 0xA | 0xC | 0xD | 0xE => {
@@ -290,7 +290,7 @@ impl MidiMsg {
     }
 }
 
-impl From<&MidiMsg> for Vec<u8> {
+impl<'a> From<&MidiMsg<'a>> for Vec<u8> {
     fn from(m: &MidiMsg) -> Vec<u8> {
         m.to_midi()
     }

@@ -34,27 +34,27 @@ use super::ReceiverContext;
 /// Also used for manufacturer-specific messages.
 /// Used in [`MidiMsg`](crate::MidiMsg).
 #[derive(Debug, Clone, PartialEq)]
-pub enum SystemExclusiveMsg {
+pub enum SystemExclusiveMsg<'a> {
     /// An arbitrary set of 7-bit "bytes", the meaning of which must be derived from the
     /// message, the definition of which is determined by the given manufacturer.
-    Commercial { id: ManufacturerID, data: Vec<u8> },
+    Commercial { id: ManufacturerID, data: &'a [u8] },
     /// Similar to `Commercial` but for use in non-commercial situations.
-    NonCommercial { data: Vec<u8> },
+    NonCommercial { data: &'a [u8] },
     /// A diverse range of messages, for real-time applications.
     /// A message is targeted to the given `device`.
     UniversalRealTime {
         device: DeviceID,
-        msg: UniversalRealTimeMsg,
+        msg: UniversalRealTimeMsg<'a>,
     },
     /// A diverse range of messages, for non-real-time applications.
     /// A message is targeted to the given `device`.
     UniversalNonRealTime {
         device: DeviceID,
-        msg: UniversalNonRealTimeMsg,
+        msg: UniversalNonRealTimeMsg<'a>,
     },
 }
 
-impl SystemExclusiveMsg {
+impl<'a> SystemExclusiveMsg<'a> {
     pub(crate) fn extend_midi(&self, v: &mut Vec<u8>) {
         v.push(0xF0);
         match self {
@@ -120,14 +120,14 @@ impl SystemExclusiveMsg {
     }
 
     pub(crate) fn from_midi(
-        m: &[u8],
+        m: &'a [u8],
         ctx: &mut ReceiverContext,
     ) -> Result<(Self, usize), ParseError> {
         let m = Self::sysex_bytes_from_midi(m)?;
         match m.get(0) {
             Some(0x7D) => Ok((
                 Self::NonCommercial {
-                    data: m[1..].to_vec(),
+                    data: &m[1..],
                 },
                 m.len() + 2,
             )),
@@ -150,7 +150,7 @@ impl SystemExclusiveMsg {
                 Ok((
                     Self::Commercial {
                         id,
-                        data: m[len..].to_vec(),
+                        data: &m[len..],
                     },
                     m.len() + 2,
                 ))
@@ -231,7 +231,7 @@ impl DeviceID {
 
 /// A diverse range of messages for real-time applications. Used by [`SystemExclusiveMsg::UniversalRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalRealTimeMsg {
+pub enum UniversalRealTimeMsg<'a> {
     /// For use when a [`SystemCommonMsg::TimeCodeQuarterFrame`](crate::SystemCommonMsg::TimeCodeQuarterFrame1) is not appropriate:
     /// When rewinding, fast-forwarding, or otherwise locating and cueing, where sending quarter frame
     /// messages continuously would be excessive.
@@ -261,7 +261,7 @@ pub enum UniversalRealTimeMsg {
     /// Used to control parameters on a device that affect all sound, e.g. a global reverb.
     GlobalParameterControl(GlobalParameterControl),
     /// Used to define a range of time points.
-    TimeCodeCueing(TimeCodeCueingMsg),
+    TimeCodeCueing(TimeCodeCueingMsg<'a>),
     /// Used to control audio recording and production systems.
     MachineControlCommand(MachineControlCommandMsg),
     /// Responses to `MachineControlCommand`.
@@ -282,7 +282,7 @@ pub enum UniversalRealTimeMsg {
     KeyBasedInstrumentControl(KeyBasedInstrumentControl),
 }
 
-impl UniversalRealTimeMsg {
+impl<'a> UniversalRealTimeMsg<'a> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalRealTimeMsg::TimeCodeFull(code) => {
@@ -423,13 +423,13 @@ impl UniversalRealTimeMsg {
 
 /// A diverse range of messages for non-real-time applications. Used by [`SystemExclusiveMsg::UniversalNonRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalNonRealTimeMsg {
+pub enum UniversalNonRealTimeMsg<'a> {
     /// Used to transmit sampler data.
     SampleDump(SampleDumpMsg),
     /// Additional ways/features for transmitting sampler data per CA-019.
     ExtendedSampleDump(ExtendedSampleDumpMsg),
     /// Used to define a range of time points per MMA0001.
-    TimeCodeCueingSetup(TimeCodeCueingSetupMsg),
+    TimeCodeCueingSetup(TimeCodeCueingSetupMsg<'a>),
     /// Request that the targeted device identify itself.
     IdentityRequest,
     /// The response to an `IdentityRequest`.
@@ -471,7 +471,7 @@ pub enum UniversalNonRealTimeMsg {
     ACK(u8),
 }
 
-impl UniversalNonRealTimeMsg {
+impl<'a> UniversalNonRealTimeMsg<'a> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalNonRealTimeMsg::SampleDump(msg) => {
@@ -649,7 +649,7 @@ mod tests {
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::Commercial {
                     id: 1.into(),
-                    data: vec![0xff, 0x77, 0x00]
+                    data: &[0xff, 0x77, 0x00]
                 }
             }
             .to_midi(),
@@ -660,7 +660,7 @@ mod tests {
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::Commercial {
                     id: (1, 3).into(),
-                    data: vec![0xff, 0x77, 0x00]
+                    data: &[0xff, 0x77, 0x00]
                 }
             }
             .to_midi(),
@@ -670,7 +670,7 @@ mod tests {
         assert_eq!(
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::NonCommercial {
-                    data: vec![0xff, 0x77, 0x00]
+                    data: &[0xff, 0x77, 0x00]
                 }
             }
             .to_midi(),
@@ -708,7 +708,7 @@ mod tests {
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::Commercial {
                     id: 1.into(),
-                    data: vec![0x7f, 0x77, 0x00],
+                    data: &[0x7f, 0x77, 0x00],
                 },
             },
             &mut ctx,
@@ -718,7 +718,7 @@ mod tests {
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::Commercial {
                     id: (1, 3).into(),
-                    data: vec![0x7f, 0x77, 0x00],
+                    data: &[0x7f, 0x77, 0x00],
                 },
             },
             &mut ctx,
@@ -727,7 +727,7 @@ mod tests {
         test_serialization(
             MidiMsg::SystemExclusive {
                 msg: SystemExclusiveMsg::NonCommercial {
-                    data: vec![0x7f, 0x77, 0x00],
+                    data: &[0x7f, 0x77, 0x00],
                 },
             },
             &mut ctx,
