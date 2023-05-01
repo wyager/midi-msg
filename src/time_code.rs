@@ -420,7 +420,7 @@ mod sysex_types {
     ///
     /// As defined in the MIDI Time Code spec (MMA0001 / RP004 / RP008)
     #[derive(Debug, Clone, PartialEq)]
-    pub enum TimeCodeCueingSetupMsg {
+    pub enum TimeCodeCueingSetupMsg<Data> {
         TimeCodeOffset {
             time_code: HighResTimeCode,
         },
@@ -450,12 +450,12 @@ mod sysex_types {
         EventStart {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: Vec<MidiMsg<Data>>,
         },
         EventStop {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: Vec<MidiMsg<Data>>,
         },
         DeleteEventStart {
             time_code: HighResTimeCode,
@@ -468,7 +468,7 @@ mod sysex_types {
         Cue {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: Vec<MidiMsg<Data>>,
         },
         DeleteCue {
             time_code: HighResTimeCode,
@@ -481,8 +481,9 @@ mod sysex_types {
         },
     }
 
-    impl TimeCodeCueingSetupMsg {
-        pub(crate) fn extend_midi(&self, v: &mut Vec<u8>) {
+    use super::super::ByteStore;
+    impl<Data : ByteStore> TimeCodeCueingSetupMsg<Data> {
+        pub(crate) fn extend_midi(&self, v: &mut impl ByteStore) {
             match self {
                 Self::TimeCodeOffset { time_code } => {
                     v.push(0x00);

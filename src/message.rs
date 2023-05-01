@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use super::{
     ChannelModeMsg, ChannelVoiceMsg, ParseError, ReceiverContext, SystemCommonMsg,
-    SystemRealTimeMsg,
+    SystemRealTimeMsg, ByteStore
 };
 
 #[cfg(feature = "sysex")]
@@ -12,7 +12,7 @@ use super::SystemExclusiveMsg;
 
 /// The primary interface of this library. Used to encode MIDI messages.
 #[derive(Debug, Clone, PartialEq)]
-pub enum MidiMsg {
+pub enum MidiMsg<Data> {
     /// Channel-level messages that act on a voice, such as turning notes on and off.
     ChannelVoice {
         channel: Channel,
@@ -46,12 +46,12 @@ pub enum MidiMsg {
     /// The bulk of the MIDI spec lives here, in "Universal System Exclusive" messages.
     /// Also the home of manufacturer-specific messages.
     #[cfg(feature = "sysex")]
-    SystemExclusive { msg: SystemExclusiveMsg },
+    SystemExclusive { msg: SystemExclusiveMsg<Data> },
 }
 
-impl MidiMsg {
+impl<Data : ByteStore> MidiMsg<Data> {
     /// Turn a `MidiMsg` into a series of bytes.
-    pub fn to_midi(&self) -> Vec<u8> {
+    pub fn to_midi<Output : ByteStore>(&self) -> Output {
         let mut r: Vec<u8> = vec![];
         self.extend_midi(&mut r);
         r
@@ -80,7 +80,7 @@ impl MidiMsg {
     /// Ok results return a MidiMsg and the number of bytes consumed from the input.
     pub fn from_midi_with_context(
         m: &[u8],
-        ctx: &mut ReceiverContext,
+        ctx: &mut ReceiverContext<Data>,
     ) -> Result<(Self, usize), ParseError> {
         Self::_from_midi_with_context(m, ctx, true)
     }
@@ -89,14 +89,14 @@ impl MidiMsg {
     /// into one `MidiMsg`.
     pub fn from_midi_with_context_no_extensions(
         m: &[u8],
-        ctx: &mut ReceiverContext,
+        ctx: &mut ReceiverContext<Data>,
     ) -> Result<(Self, usize), ParseError> {
         Self::_from_midi_with_context(m, ctx, false)
     }
 
     fn _from_midi_with_context(
         m: &[u8],
-        ctx: &mut ReceiverContext,
+        ctx: &mut ReceiverContext<Data>,
         allow_extensions: bool,
     ) -> Result<(Self, usize), ParseError> {
         let (mut midi_msg, mut len) = match m.first() {

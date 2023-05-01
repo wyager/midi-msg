@@ -28,18 +28,19 @@ use super::parse_error::*;
 use super::time_code::*;
 use super::util::*;
 use super::ReceiverContext;
+use super::ByteStore;
 
 
 /// The bulk of the MIDI spec lives here, in "Universal System Exclusive" messages.
 /// Also used for manufacturer-specific messages.
 /// Used in [`MidiMsg`](crate::MidiMsg).
 #[derive(Debug, Clone, PartialEq)]
-pub enum SystemExclusiveMsg {
+pub enum SystemExclusiveMsg<Data> {
     /// An arbitrary set of 7-bit "bytes", the meaning of which must be derived from the
     /// message, the definition of which is determined by the given manufacturer.
-    Commercial { id: ManufacturerID, data: Vec<u8> },
+    Commercial { id: ManufacturerID, data: Data },
     /// Similar to `Commercial` but for use in non-commercial situations.
-    NonCommercial { data: Vec<u8> },
+    NonCommercial { data: Data },
     /// A diverse range of messages, for real-time applications.
     /// A message is targeted to the given `device`.
     UniversalRealTime {
@@ -54,51 +55,43 @@ pub enum SystemExclusiveMsg {
     },
 }
 
-impl SystemExclusiveMsg {
-    pub(crate) fn extend_midi(&self, v: &mut Vec<u8>) {
-        v.push(0xF0);
+impl<Data : ByteStore> SystemExclusiveMsg<Data> {
+    pub(crate) fn extend_midi(&self, v: &mut impl ByteStore) -> Option<()> {
+        v.push(0xF0)?;
         match self {
             SystemExclusiveMsg::Commercial { id, data } => {
                 id.extend_midi(v);
-                data.iter().for_each(|d| v.push(to_u7(*d)));
+                data.iter().for_each(|d| v.push(to_u7(*d))?);
             }
             SystemExclusiveMsg::NonCommercial { data } => {
-                v.push(0x7D);
-                data.iter().for_each(|d| v.push(to_u7(*d)));
+                v.push(0x7D)?;
+                data.iter().for_each(|d| v.push(to_u7(*d))?);
             }
             SystemExclusiveMsg::UniversalRealTime { device, msg } => {
-                v.push(0x7F);
-                v.push(device.to_u8());
-                msg.extend_midi(v);
+                v.push(0x7F)?;
+                v.push(device.to_u8())?;
+                msg.extend_midi(v)?;
             }
             SystemExclusiveMsg::UniversalNonRealTime { device, msg } => {
                 let p = v.len();
-                v.push(0x7E);
-                v.push(device.to_u8());
-                msg.extend_midi(v);
-                if let UniversalNonRealTimeMsg::SampleDump(SampleDumpMsg::Packet { .. }) = msg {
-                    let q = v.len();
-                    v[q - 1] = checksum(&v[p..q - 1]);
-                }
-                if let UniversalNonRealTimeMsg::KeyBasedTuningDump(_) = msg {
-                    let q = v.len();
-                    v[q - 1] = checksum(&v[p..q - 1]);
-                }
-                if let UniversalNonRealTimeMsg::ScaleTuning1Byte(_) = msg {
-                    let q = v.len();
-                    v[q - 1] = checksum(&v[p..q - 1]);
-                }
-                if let UniversalNonRealTimeMsg::ScaleTuning2Byte(_) = msg {
-                    let q = v.len();
-                    v[q - 1] = checksum(&v[p..q - 1]);
-                }
-                if let UniversalNonRealTimeMsg::FileDump(FileDumpMsg::Packet { .. }) = msg {
-                    let q = v.len();
-                    v[q - 1] = checksum(&v[p..q - 1]);
+                v.push(0x7E)?;
+                v.push(device.to_u8())?;
+                msg.extend_midi(v)?;
+                match msg {
+                    UniversalNonRealTimeMsg::SampleDump(SampleDumpMsg::Packet { .. }) | 
+                    UniversalNonRealTimeMsg::KeyBasedTuningDump(_)| 
+                    UniversalNonRealTimeMsg::ScaleTuning1Byte(_)| 
+                    UniversalNonRealTimeMsg::ScaleTuning2Byte(_)| 
+                    UniversalNonRealTimeMsg::FileDump(FileDumpMsg::Packet { .. }) => {
+                        let checksum = v.iter().fold(0, |a,b| a ^ b);
+                        v.push(checksum)?;
+                    },
+                    _ => {}
                 }
             }
         }
-        v.push(0xF7);
+        v.push(0xF7)?;
+        Some(())
     }
 
     fn sysex_bytes_from_midi(m: &[u8]) -> Result<&[u8], ParseError> {
@@ -121,7 +114,7 @@ impl SystemExclusiveMsg {
 
     pub(crate) fn from_midi(
         m: &[u8],
-        ctx: &mut ReceiverContext,
+        ctx: &mut ReceiverContext<impl ByteStore>,
     ) -> Result<(Self, usize), ParseError> {
         let m = Self::sysex_bytes_from_midi(m)?;
         match m.get(0) {

@@ -132,9 +132,12 @@ pub use system_exclusive::*;
 mod message;
 pub use message::*;
 
+mod data;
+pub use data::*;
+
 // A helper used in tests
 #[cfg(test)]
-pub fn test_serialization(msg: MidiMsg, ctx: &mut ReceiverContext) {
+pub fn test_serialization(msg: MidiMsg<Vec<u8>>, ctx: &mut ReceiverContext<Vec<u8>>) {
     #[cfg(not(feature = "std"))]
     use crate::alloc::format;
 
