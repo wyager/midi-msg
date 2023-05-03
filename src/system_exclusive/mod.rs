@@ -39,7 +39,7 @@ use super::Store;
 /// Also used for manufacturer-specific messages.
 /// Used in [`MidiMsg`](crate::MidiMsg).
 #[derive(Debug, Clone, PartialEq)]
-pub enum SystemExclusiveMsg<Data,AdditionalInformationStore> {
+pub enum SystemExclusiveMsg<Data> {
     /// An arbitrary set of 7-bit "bytes", the meaning of which must be derived from the
     /// message, the definition of which is determined by the given manufacturer.
     Commercial { id: ManufacturerID, data: Data },
@@ -49,17 +49,17 @@ pub enum SystemExclusiveMsg<Data,AdditionalInformationStore> {
     /// A message is targeted to the given `device`.
     UniversalRealTime {
         device: DeviceID,
-        msg: UniversalRealTimeMsg<AdditionalInformationStore>,
+        msg: UniversalRealTimeMsg<Data>,
     },
     /// A diverse range of messages, for non-real-time applications.
     /// A message is targeted to the given `device`.
     UniversalNonRealTime {
         device: DeviceID,
-        msg: UniversalNonRealTimeMsg<AdditionalInformationStore>,
+        msg: UniversalNonRealTimeMsg<Data>,
     },
 }
 
-impl<Data : Store<T=u8>, AdditionalInformationStore : Store<T=MidiMsg<Data>>> SystemExclusiveMsg<Data,AdditionalInformationStore> {
+impl<Data : Store<T=u8>> SystemExclusiveMsg<Data> {
     pub(crate) fn extend_midi(&self, v: &mut impl Store<T=u8>) -> Option<()> {
         v.push(0xF0)?;
         match self {
@@ -228,7 +228,7 @@ impl DeviceID {
 
 /// A diverse range of messages for real-time applications. Used by [`SystemExclusiveMsg::UniversalRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalRealTimeMsg<AdditionalMessageStore> {
+pub enum UniversalRealTimeMsg<Data> {
     /// For use when a [`SystemCommonMsg::TimeCodeQuarterFrame`](crate::SystemCommonMsg::TimeCodeQuarterFrame1) is not appropriate:
     /// When rewinding, fast-forwarding, or otherwise locating and cueing, where sending quarter frame
     /// messages continuously would be excessive.
@@ -258,7 +258,7 @@ pub enum UniversalRealTimeMsg<AdditionalMessageStore> {
     /// Used to control parameters on a device that affect all sound, e.g. a global reverb.
     GlobalParameterControl(GlobalParameterControl),
     /// Used to define a range of time points.
-    TimeCodeCueing(TimeCodeCueingMsg<AdditionalMessageStore>),
+    TimeCodeCueing(TimeCodeCueingMsg<Data>),
     /// Used to control audio recording and production systems.
     MachineControlCommand(MachineControlCommandMsg),
     /// Responses to `MachineControlCommand`.
@@ -279,7 +279,7 @@ pub enum UniversalRealTimeMsg<AdditionalMessageStore> {
     KeyBasedInstrumentControl(KeyBasedInstrumentControl),
 }
 
-impl<Data : Store<T=u8>, AdditionalMessageStore : Store<T=MidiMsg<Data>>> UniversalRealTimeMsg<AdditionalMessageStore> {
+impl<Data : Store<T=u8>> UniversalRealTimeMsg<Data> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalRealTimeMsg::TimeCodeFull(code) => {
@@ -420,13 +420,13 @@ impl<Data : Store<T=u8>, AdditionalMessageStore : Store<T=MidiMsg<Data>>> Univer
 
 /// A diverse range of messages for non-real-time applications. Used by [`SystemExclusiveMsg::UniversalNonRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalNonRealTimeMsg<AdditionalInformationStore> {
+pub enum UniversalNonRealTimeMsg<Data> {
     /// Used to transmit sampler data.
     SampleDump(SampleDumpMsg),
     /// Additional ways/features for transmitting sampler data per CA-019.
     ExtendedSampleDump(ExtendedSampleDumpMsg),
     /// Used to define a range of time points per MMA0001.
-    TimeCodeCueingSetup(TimeCodeCueingSetupMsg<AdditionalInformationStore>),
+    TimeCodeCueingSetup(TimeCodeCueingSetupMsg<Data>),
     /// Request that the targeted device identify itself.
     IdentityRequest,
     /// The response to an `IdentityRequest`.
@@ -468,7 +468,7 @@ pub enum UniversalNonRealTimeMsg<AdditionalInformationStore> {
     ACK(u8),
 }
 
-impl<Data : Store<T=u8>, AdditionalInformationStore : Store<T=MidiMsg<Data>>> UniversalNonRealTimeMsg<AdditionalInformationStore> {
+impl<Data : Store<T=u8>> UniversalNonRealTimeMsg<Data> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalNonRealTimeMsg::SampleDump(msg) => {

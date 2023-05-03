@@ -290,8 +290,8 @@ impl<Data : Store<T=u8>> MidiMsg<Data> {
     }
 }
 
-impl From<&MidiMsg> for Vec<u8> {
-    fn from(m: &MidiMsg) -> Vec<u8> {
+impl<Data : Store<T=u8>> From<&MidiMsg<Data>> for Vec<u8> {
+    fn from(m: &MidiMsg<Data>) -> Vec<u8> {
         m.to_midi()
     }
 }

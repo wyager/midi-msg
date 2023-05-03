@@ -422,7 +422,7 @@ mod sysex_types {
     ///
     /// As defined in the MIDI Time Code spec (MMA0001 / RP004 / RP008)
     #[derive(Debug, Clone, PartialEq)]
-    pub enum TimeCodeCueingSetupMsg<AdditionalInformationStore> {
+    pub enum TimeCodeCueingSetupMsg<Data> {
         TimeCodeOffset {
             time_code: HighResTimeCode,
         },
@@ -452,12 +452,12 @@ mod sysex_types {
         EventStart {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: AdditionalInformationStore,
+            additional_information: Data,
         },
         EventStop {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: AdditionalInformationStore,
+            additional_information: Data,
         },
         DeleteEventStart {
             time_code: HighResTimeCode,
@@ -470,7 +470,7 @@ mod sysex_types {
         Cue {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: AdditionalInformationStore,
+            additional_information: Data,
         },
         DeleteCue {
             time_code: HighResTimeCode,
