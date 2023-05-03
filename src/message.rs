@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 
 use super::{
     ChannelModeMsg, ChannelVoiceMsg, ParseError, ReceiverContext, SystemCommonMsg,
-    SystemRealTimeMsg, ByteStore
+    SystemRealTimeMsg, Store
 };
 
 #[cfg(feature = "sysex")]
@@ -49,9 +49,9 @@ pub enum MidiMsg<Data> {
     SystemExclusive { msg: SystemExclusiveMsg<Data> },
 }
 
-impl<Data : ByteStore> MidiMsg<Data> {
+impl<Data : Store<T=u8>> MidiMsg<Data> {
     /// Turn a `MidiMsg` into a series of bytes.
-    pub fn to_midi<Output : ByteStore>(&self) -> Output {
+    pub fn to_midi<Output : Store<T=u8>>(&self) -> Output {
         let mut r: Vec<u8> = vec![];
         self.extend_midi(&mut r);
         r

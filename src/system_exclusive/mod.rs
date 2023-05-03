@@ -1,4 +1,6 @@
 mod controller_destination;
+use core::ops::Add;
+
 pub use controller_destination::*;
 mod file_dump;
 pub use file_dump::*;
@@ -23,19 +25,21 @@ pub use tuning::*;
 use alloc::vec::Vec;
 use alloc::format;
 
+use crate::MidiMsg;
+
 use super::general_midi::GeneralMidi;
 use super::parse_error::*;
 use super::time_code::*;
 use super::util::*;
 use super::ReceiverContext;
-use super::ByteStore;
+use super::Store;
 
 
 /// The bulk of the MIDI spec lives here, in "Universal System Exclusive" messages.
 /// Also used for manufacturer-specific messages.
 /// Used in [`MidiMsg`](crate::MidiMsg).
 #[derive(Debug, Clone, PartialEq)]
-pub enum SystemExclusiveMsg<Data> {
+pub enum SystemExclusiveMsg<Data,AdditionalInformationStore> {
     /// An arbitrary set of 7-bit "bytes", the meaning of which must be derived from the
     /// message, the definition of which is determined by the given manufacturer.
     Commercial { id: ManufacturerID, data: Data },
@@ -45,18 +49,18 @@ pub enum SystemExclusiveMsg<Data> {
     /// A message is targeted to the given `device`.
     UniversalRealTime {
         device: DeviceID,
-        msg: UniversalRealTimeMsg,
+        msg: UniversalRealTimeMsg<AdditionalInformationStore>,
     },
     /// A diverse range of messages, for non-real-time applications.
     /// A message is targeted to the given `device`.
     UniversalNonRealTime {
         device: DeviceID,
-        msg: UniversalNonRealTimeMsg,
+        msg: UniversalNonRealTimeMsg<AdditionalInformationStore>,
     },
 }
 
-impl<Data : ByteStore> SystemExclusiveMsg<Data> {
-    pub(crate) fn extend_midi(&self, v: &mut impl ByteStore) -> Option<()> {
+impl<Data : Store<T=u8>, AdditionalInformationStore : Store<T=MidiMsg<Data>>> SystemExclusiveMsg<Data,AdditionalInformationStore> {
+    pub(crate) fn extend_midi(&self, v: &mut impl Store<T=u8>) -> Option<()> {
         v.push(0xF0)?;
         match self {
             SystemExclusiveMsg::Commercial { id, data } => {
@@ -114,7 +118,7 @@ impl<Data : ByteStore> SystemExclusiveMsg<Data> {
 
     pub(crate) fn from_midi(
         m: &[u8],
-        ctx: &mut ReceiverContext<impl ByteStore>,
+        ctx: &mut ReceiverContext<impl Store<T=u8>>,
     ) -> Result<(Self, usize), ParseError> {
         let m = Self::sysex_bytes_from_midi(m)?;
         match m.get(0) {
@@ -224,7 +228,7 @@ impl DeviceID {
 
 /// A diverse range of messages for real-time applications. Used by [`SystemExclusiveMsg::UniversalRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalRealTimeMsg {
+pub enum UniversalRealTimeMsg<AdditionalMessageStore> {
     /// For use when a [`SystemCommonMsg::TimeCodeQuarterFrame`](crate::SystemCommonMsg::TimeCodeQuarterFrame1) is not appropriate:
     /// When rewinding, fast-forwarding, or otherwise locating and cueing, where sending quarter frame
     /// messages continuously would be excessive.
@@ -254,7 +258,7 @@ pub enum UniversalRealTimeMsg {
     /// Used to control parameters on a device that affect all sound, e.g. a global reverb.
     GlobalParameterControl(GlobalParameterControl),
     /// Used to define a range of time points.
-    TimeCodeCueing(TimeCodeCueingMsg),
+    TimeCodeCueing(TimeCodeCueingMsg<AdditionalMessageStore>),
     /// Used to control audio recording and production systems.
     MachineControlCommand(MachineControlCommandMsg),
     /// Responses to `MachineControlCommand`.
@@ -275,7 +279,7 @@ pub enum UniversalRealTimeMsg {
     KeyBasedInstrumentControl(KeyBasedInstrumentControl),
 }
 
-impl UniversalRealTimeMsg {
+impl<Data : Store<T=u8>, AdditionalMessageStore : Store<T=MidiMsg<Data>>> UniversalRealTimeMsg<AdditionalMessageStore> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalRealTimeMsg::TimeCodeFull(code) => {
@@ -392,7 +396,7 @@ impl UniversalRealTimeMsg {
         }
     }
 
-    fn from_midi(m: &[u8], ctx: &mut ReceiverContext) -> Result<Self, ParseError> {
+    fn from_midi(m: &[u8], ctx: &mut ReceiverContext<impl Store<T=u8>>) -> Result<Self, ParseError> {
         if m.len() < 2 {
             return Err(crate::ParseError::UnexpectedEnd);
         }
@@ -416,13 +420,13 @@ impl UniversalRealTimeMsg {
 
 /// A diverse range of messages for non-real-time applications. Used by [`SystemExclusiveMsg::UniversalNonRealTime`].
 #[derive(Debug, Clone, PartialEq)]
-pub enum UniversalNonRealTimeMsg {
+pub enum UniversalNonRealTimeMsg<AdditionalInformationStore> {
     /// Used to transmit sampler data.
     SampleDump(SampleDumpMsg),
     /// Additional ways/features for transmitting sampler data per CA-019.
     ExtendedSampleDump(ExtendedSampleDumpMsg),
     /// Used to define a range of time points per MMA0001.
-    TimeCodeCueingSetup(TimeCodeCueingSetupMsg),
+    TimeCodeCueingSetup(TimeCodeCueingSetupMsg<AdditionalInformationStore>),
     /// Request that the targeted device identify itself.
     IdentityRequest,
     /// The response to an `IdentityRequest`.
@@ -464,7 +468,7 @@ pub enum UniversalNonRealTimeMsg {
     ACK(u8),
 }
 
-impl UniversalNonRealTimeMsg {
+impl<Data : Store<T=u8>, AdditionalInformationStore : Store<T=MidiMsg<Data>>> UniversalNonRealTimeMsg<AdditionalInformationStore> {
     fn extend_midi(&self, v: &mut Vec<u8>) {
         match self {
             UniversalNonRealTimeMsg::SampleDump(msg) => {

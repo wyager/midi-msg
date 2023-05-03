@@ -103,6 +103,8 @@ impl Default for TimeCodeType {
 
 #[cfg(feature = "sysex")]
 mod sysex_types {
+    use core::ops::Add;
+
     use super::*;
     use bstr::BString;
     use alloc::vec::Vec;
@@ -420,7 +422,7 @@ mod sysex_types {
     ///
     /// As defined in the MIDI Time Code spec (MMA0001 / RP004 / RP008)
     #[derive(Debug, Clone, PartialEq)]
-    pub enum TimeCodeCueingSetupMsg<Data> {
+    pub enum TimeCodeCueingSetupMsg<AdditionalInformationStore> {
         TimeCodeOffset {
             time_code: HighResTimeCode,
         },
@@ -450,12 +452,12 @@ mod sysex_types {
         EventStart {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg<Data>>,
+            additional_information: AdditionalInformationStore,
         },
         EventStop {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg<Data>>,
+            additional_information: AdditionalInformationStore,
         },
         DeleteEventStart {
             time_code: HighResTimeCode,
@@ -468,7 +470,7 @@ mod sysex_types {
         Cue {
             time_code: HighResTimeCode,
             event_number: u16,
-            additional_information: Vec<MidiMsg<Data>>,
+            additional_information: AdditionalInformationStore,
         },
         DeleteCue {
             time_code: HighResTimeCode,
@@ -481,9 +483,9 @@ mod sysex_types {
         },
     }
 
-    use super::super::ByteStore;
-    impl<Data : ByteStore> TimeCodeCueingSetupMsg<Data> {
-        pub(crate) fn extend_midi(&self, v: &mut impl ByteStore) {
+    use super::super::Store;
+    impl<Data : Store<T=u8>> TimeCodeCueingSetupMsg<Data> {
+        pub(crate) fn extend_midi(&self, v: &mut impl Store<T=u8>) {
             match self {
                 Self::TimeCodeOffset { time_code } => {
                     v.push(0x00);
@@ -642,7 +644,7 @@ mod sysex_types {
     ///
     /// As defined in the MIDI Time Code spec (MMA0001 / RP004 / RP008)
     #[derive(Debug, Clone, PartialEq)]
-    pub enum TimeCodeCueingMsg {
+    pub enum TimeCodeCueingMsg<AdditionalInformation> {
         SystemStop,
         PunchIn {
             event_number: u16,
@@ -652,15 +654,15 @@ mod sysex_types {
         },
         EventStart {
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: AdditionalInformation,
         },
         EventStop {
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: AdditionalInformation,
         },
         Cue {
             event_number: u16,
-            additional_information: Vec<MidiMsg>,
+            additional_information: AdditionalInformation,
         },
         EventName {
             event_number: u16,
@@ -668,7 +670,7 @@ mod sysex_types {
         },
     }
 
-    fn push_nibblized_midi(msgs: &[MidiMsg], v: &mut Vec<u8>) {
+    fn push_nibblized_midi(msgs: &[MidiMsg<impl Store<T=u8>>], v: &mut Vec<u8>) {
         for msg in msgs.iter() {
             for b in msg.to_midi().iter() {
                 let [msn, lsn] = to_nibble(*b);
@@ -687,7 +689,7 @@ mod sysex_types {
         }
     }
 
-    impl TimeCodeCueingMsg {
+    impl<Data : Store<T=u8>, AdditionalInformation : Store<T=MidiMsg<Data>>>  TimeCodeCueingMsg<AdditionalInformation> {
         pub(crate) fn extend_midi(&self, v: &mut Vec<u8>) {
             match self {
                 Self::SystemStop => {

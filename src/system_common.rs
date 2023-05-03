@@ -4,7 +4,7 @@ use super::parse_error::*;
 use super::time_code::*;
 use super::util::*;
 use super::ReceiverContext;
-use super::ByteStore;
+use super::Store;
 
 /// A fairly limited set of messages, generally for device synchronization.
 /// Used in [`MidiMsg`](crate::MidiMsg).
@@ -81,7 +81,7 @@ impl SystemCommonMsg {
 
     pub(crate) fn from_midi(
         m: &[u8],
-        ctx: &mut ReceiverContext<impl ByteStore>,
+        ctx: &mut ReceiverContext<impl Store<T=u8>>,
     ) -> Result<(Self, usize), ParseError> {
         match m.first() {
             Some(0xF1) => {
